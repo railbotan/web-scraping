@@ -1,30 +1,104 @@
 const puppeteer = require("puppeteer");
 const cheerio = require("cheerio");
+const fs = require("fs");
 
-async function getContents(urls) {
+const moreUniversitySelector= "body > div:nth-child(2) > div.maincontent > div.m270 > div > div.mobpadd20.morediv";
+const moreSpecialtiesSelector = "#rezspec > div.mobpadd20.morediv";
+
+const specialtiesSelector = "#rezspec > div.headnap > div.napravlenienaz > center > span.font3 > b";
+const specialtyCodesSelector = "#rezspec > div.headnap > div.napravlenienaz > center > span.font2";
+const notesSelector = "div.mobpadd20-3:nth-child(2) table.cirfloat.cirfloatmargin:first-child table.circ2.circ2unique b.font11";
+
+async function getLinks(content) {
+    const dom = cheerio.load(content);
+    const links = [];
+    dom("a[href$=proxodnoi]").each((i, elem) => {
+        const link = dom(elem).attr('href');
+        links.push(link);
+    });
+    return links;
+}
+
+async function pageClicker(page, selector) {
+    while (true) {
+        try {
+            await page.waitForSelector(selector);
+            await page.click(selector);
+        } catch (e) {
+            break;
+        }
+    }
+}
+
+async function getContents(url) {
     const pages = [];
     const browser = await puppeteer.launch();
-    let page = await browser.newPage();
-    for (const url of urls) {
-        await page.goto(url);
-        const content = await page.content();
-        pages.push(content);
+    const page = await browser.newPage();
+    await page.goto(url);
+    await pageClicker(page, moreUniversitySelector);
+    const content = await page.content();
+    const links = await getLinks(content);
+    for (const link of links) {
+        await page.goto(url + '/' + link);
+        await pageClicker(page, moreSpecialtiesSelector);
+        const pageContent = await page.content();
+        pages.push(pageContent);
     }
     await browser.close();
     return pages;
 }
 
-async function f() {
-    const pages = await getContents(["https://google.com", "https://yandex.ru", "https://vk.com"]);
-    for (const page of pages){
-        const $ = cheerio.load(page);
-        let a = $("title");
-        let b = a[0].children[0];
-        console.log(b.data);
-    }
+function parsePage(page) {
+    const dom = cheerio.load(page);
+    const name = dom("h2[itemprop=name]").text();
+    const alterName = dom("h2[itemprop=alternateName]").text();
+
+    const specialties = [];
+
+    dom(specialtiesSelector).each((i, elem) => {
+        const data = dom(elem).text();
+        specialties[i] = {
+            specialty: data
+        };
+    });
+    dom(specialtyCodesSelector).each((i, elem) => {
+        const data = dom(elem).text();
+        specialties[i] = {
+            ...specialties[i],
+            code: data.split(' | ')[1]
+        };
+    });
+    dom(notesSelector).each((i, elem) => {
+        const data = dom(elem).text();
+        specialties[i] = {
+            ...specialties[i],
+            note: data
+        };
+    });
+    return {
+        name,
+        alterName,
+        specialties
+    };
 }
 
-f().then(()=>console.log("end"));
+async function getData() {
+    const result = [];
+    const pages = await getContents("https://tabiturient.ru");
+    for (const page of pages) {
+        result.push(parsePage(page));
+    }
+    return result;
+}
+
+function writeFile(data) {
+    const json = JSON.stringify(data, null, 2);
+    fs.writeFile("D:\\Практика 3\\web-scraping\\temp.json", json, () => console.log("write!"));
+}
+
+getData().then(writeFile);
+
+
 
 
 
