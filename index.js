@@ -15,6 +15,7 @@ async function getLinks(content) {
     dom("a[href$=proxodnoi]").each((i, elem) => {
         const link = dom(elem).attr('href');
         links.push(link);
+        console.log(`Получена ссылка №${i+1}: ${link}`);
     });
     return links;
 }
@@ -37,11 +38,13 @@ async function getContents(url) {
     await page.goto(url);
     await pageClicker(page, moreUniversitySelector);
     const content = await page.content();
+    console.log("Получена главная страница");
     const links = await getLinks(content);
     for (const link of links) {
-        await page.goto(url + '/' + link);
+        await page.goto(link);
         await pageClicker(page, moreSpecialtiesSelector);
         const pageContent = await page.content();
+        console.log(`Получена страница ${link}`);
         pages.push(pageContent);
     }
     await browser.close();
@@ -75,6 +78,7 @@ function parsePage(page) {
             note: data
         };
     });
+    console.log(`Извлеченны данные для ${alterName}`);
     return {
         name,
         alterName,
@@ -98,10 +102,8 @@ function writeFile(data) {
 
 getData().then(writeFile);
 
+function readFile(data) {
+    const vuz = JSON.parse(data, (key, value) => key === "note" ? parseInt(value) : value);
+}
 
-
-
-
-
-
-
+//fs.readFile("D:\\Практика 3\\web-scraping\\temp.json", "utf-8", (err, data) => readFile(data));
